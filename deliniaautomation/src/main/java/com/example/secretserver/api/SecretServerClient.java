@@ -1,4 +1,4 @@
-// change 4 00:49
+// change 5 - 09:22
 
 package com.example.secretserver.api;
 
@@ -10,7 +10,7 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
@@ -90,10 +90,10 @@ public class SecretServerClient {
     }
 
     public boolean disableSecret(String secretId, int retries) {
-        String url = baseUrl + "/secrets/" + secretId + "/disable";
+        String url = baseUrl + "/secrets/" + secretId;
         for (int attempt = 1; attempt <= retries; attempt++) {
             try {
-                HttpPost request = new HttpPost(url);
+                HttpDelete request = new HttpDelete(url);
                 request.addHeader("Authorization", "Bearer " + authToken);
                 request.addHeader("Accept", "application/json");
                 request.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
@@ -105,7 +105,8 @@ public class SecretServerClient {
                 int statusCode = response.getStatusLine().getStatusCode();
                 String json = EntityUtils.toString(response.getEntity());
                 logger.debug("API response for disableSecret secretId {}: {}", secretId, json);
-                if (statusCode == 200) {
+                if (statusCode == 200 || statusCode == 204) {
+                    logger.info("Successfully disabled secretId {}", secretId);
                     return true;
                 } else {
                     logger.error("Disable failed for secretId {}: HTTP {}, Response: {}", secretId, statusCode, json);
