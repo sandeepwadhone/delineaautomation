@@ -1,4 +1,4 @@
-// change 3 00:20
+// changes 4 00:50
 
 package com.example.secretserver;
 
@@ -31,7 +31,7 @@ public class Main {
             Workbook workbook = excelHandler.loadWorkbook();
             logger.info("Excel file opened successfully");
             Sheet sheet = workbook.getSheetAt(0);  // Assume first sheet
-            logger.info("Loaded sheet: {}", sheet.getSheetName());
+            logger.info("Loaded sheet: {}, Total rows: {}", sheet.getSheetName(), sheet.getLastRowNum() + 1);
 
             // Initialize API client
             logger.info("Initializing SecretServerClient with base URL: {}", config.getProperty("secret.server.base.url"));
@@ -49,9 +49,9 @@ public class Main {
                     logger.warn("Skipping row {}: Row is null", i + 1);
                     continue;
                 }
-                logger.info("Starting to process row {}", i + 1);
+                logger.info("Starting to process row {} (Excel row {})", i + 1, row.getRowNum() + 1);
                 processRow(row, apiClient);
-                logger.info("Finished processing row {}", i + 1);
+                logger.info("Finished processing row {} (Excel row {})", i + 1, row.getRowNum() + 1);
             }
             logger.info("Finished processing all rows");
 
@@ -70,16 +70,20 @@ public class Main {
 
     private static void processRow(Row row, SecretServerClient apiClient) {
         try {
-            String secretId = ExcelHandler.getCellValue(row.getCell(0));
-            String secretName = ExcelHandler.getCellValue(row.getCell(1));
+            Cell secretIdCell = row.getCell(0, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+            Cell secretNameCell = row.getCell(1, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+            String secretId = ExcelHandler.getCellValue(secretIdCell);
+            String secretName = ExcelHandler.getCellValue(secretNameCell);
 
-            if (secretId == null || secretName == null) {
-                logger.warn("Skipping row {}: secretid or secretname is null", row.getRowNum() + 1);
+            if (secretId == null || secretId.trim().isEmpty() || secretName == null || secretName.trim().isEmpty()) {
+                logger.warn("Skipping row {}: secretid or secretname is null or empty", row.getRowNum() + 1);
                 return;
             }
+            logger.debug("Read secretId: {}, secretName: {}", secretId, secretName);
 
             // Log payload for getSecretDetails API call
             String getUrl = apiClient.getBaseUrl() + "/secrets/" + secretId;
+            logger.info("getUrl: {}", getUrl);
             logger.info("API payload for getSecretDetails: URL={}, Headers=[Authorization: Bearer <redacted>, Accept: application/json, User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36]");
             logger.info("Starting API call to get details for secretId {}", secretId);
             SecretServerClient.SecretDetails details = apiClient.getSecretDetails(secretId, 3);
@@ -98,6 +102,7 @@ public class Main {
 
             // Log payload for disableSecret API call
             String disableUrl = apiClient.getBaseUrl() + "/secrets/" + secretId + "/disable";
+            logger.info("disableUrl: {}", disableUrl);
             logger.info("API payload for disableSecret: URL={}, Headers=[Authorization: Bearer <redacted>, Accept: application/json, User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36]");
             logger.info("Starting API call to disable secretId {}", secretId);
             boolean disableSuccess = apiClient.disableSecret(secretId, 3);
