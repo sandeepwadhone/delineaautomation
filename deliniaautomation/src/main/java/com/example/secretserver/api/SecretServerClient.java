@@ -1,4 +1,4 @@
-// changes 3 00:22
+// change 4 00:49
 
 package com.example.secretserver.api;
 
@@ -61,21 +61,26 @@ public class SecretServerClient {
                 request.addHeader("Authorization", "Bearer " + authToken);
                 request.addHeader("Accept", "application/json");
                 request.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+                request.addHeader("Cookie", "visid_incap_1873009=nzNfpneU/+vH; nlbi_1873009=ic7db48rc31M2aNeoAODJqAMAAC31VM36Y4yE1coN4s3G2Yd; incap_ses_68_1873009=h/5tIZ00TQ4xOGfzDpbxANjnq2gAAAAAaxK5fgXmKLZSKfg5Lky7Tg==");
                 HttpResponse response = httpClient.execute(request);
                 for (Header header : response.getAllHeaders()) {
                     logger.debug("Response header: {}: {}", header.getName(), header.getValue());
                 }
                 int statusCode = response.getStatusLine().getStatusCode();
+                String json = EntityUtils.toString(response.getEntity());
+                logger.debug("API response for secretId {}: {}", secretId, json);
                 if (statusCode == 200) {
-                    String json = EntityUtils.toString(response.getEntity());
-                    logger.debug("API response for secretId {}: {}", secretId, json);
                     JsonObject jsonObject = gson.fromJson(json, JsonObject.class);
+                    if (jsonObject == null || !jsonObject.has("id") || !jsonObject.has("name") || !jsonObject.has("status")) {
+                        logger.error("Invalid JSON response for secretId {}: {}", secretId, json);
+                        return null;
+                    }
                     String id = jsonObject.get("id").getAsString();
                     String name = jsonObject.get("name").getAsString();
                     String status = jsonObject.get("status").getAsString();
                     return new SecretDetails(id, name, status);
                 } else {
-                    logger.error("Get details failed for secretId {}: HTTP {}", secretId, statusCode);
+                    logger.error("Get details failed for secretId {}: HTTP {}, Response: {}", secretId, statusCode, json);
                 }
             } catch (IOException e) {
                 logger.warn("Network issue for secretId {} on attempt {}/{}: {}", secretId, attempt, retries, e.getMessage());
@@ -92,15 +97,18 @@ public class SecretServerClient {
                 request.addHeader("Authorization", "Bearer " + authToken);
                 request.addHeader("Accept", "application/json");
                 request.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+                request.addHeader("Cookie", "visid_incap_1873009=nzNfpneU/+vH; nlbi_1873009=ic7db48rc31M2aNeoAODJqAMAAC31VM36Y4yE1coN4s3G2Yd; incap_ses_68_1873009=h/5tIZ00TQ4xOGfzDpbxANjnq2gAAAAAaxK5fgXmKLZSKfg5Lky7Tg==");
                 HttpResponse response = httpClient.execute(request);
                 for (Header header : response.getAllHeaders()) {
                     logger.debug("Response header: {}: {}", header.getName(), header.getValue());
                 }
                 int statusCode = response.getStatusLine().getStatusCode();
+                String json = EntityUtils.toString(response.getEntity());
+                logger.debug("API response for disableSecret secretId {}: {}", secretId, json);
                 if (statusCode == 200) {
                     return true;
                 } else {
-                    logger.error("Disable failed for secretId {}: HTTP {}", secretId, statusCode);
+                    logger.error("Disable failed for secretId {}: HTTP {}, Response: {}", secretId, statusCode, json);
                 }
             } catch (IOException e) {
                 logger.warn("Network issue for secretId {} on attempt {}/{}: {}", secretId, attempt, retries, e.getMessage());
