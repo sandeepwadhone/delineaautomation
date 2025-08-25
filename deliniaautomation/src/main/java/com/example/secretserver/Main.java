@@ -1,110 +1,80 @@
-package com.example.secretserver;
+// changes 3 00:18
+package com.example.secretserver.excel;
 
-import com.example.secretserver.api.SecretServerClient;
-import com.example.secretserver.config.AppConfig;
-import com.example.secretserver.excel.ExcelHandler;
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Properties;
 
-public class Main {
-    private static final Logger logger = LoggerFactory.getLogger(Main.class);
-    private static final String EXCEL_FILE_PATH = "C:\\Users\\ACER\\Documents\\sandeep\\secrets.xlsx";
+public class ExcelHandler {
+    private static final Logger logger = LoggerFactory.getLogger(ExcelHandler.class);
+    private final String filePath;
 
-    public static void main(String[] args) {
-        try {
-            // Load configuration for API settings
-            Properties config = AppConfig.loadProperties();
-            logger.info("Using hardcoded Excel file path: {}", EXCEL_FILE_PATH);
+    public ExcelHandler(String filePath) {
+        this.filePath = filePath;
+    }
 
-            // Initialize Excel handler and load workbook
-            ExcelHandler excelHandler = new ExcelHandler(EXCEL_FILE_PATH);
-            logger.info("Starting to open Excel file: {}", EXCEL_FILE_PATH);
-            Workbook workbook = excelHandler.loadWorkbook();
-            logger.info("Excel file opened successfully");
-            Sheet sheet = workbook.getSheetAt(0);  // Assume first sheet
-            logger.info("Loaded sheet: {}", sheet.getSheetName());
-
-            // Initialize API client
-            logger.info("Initializing SecretServerClient with base URL: {}", config.getProperty("secret.server.base.url"));
-            SecretServerClient apiClient = new SecretServerClient(
-                    config.getProperty("secret.server.base.url"),
-                    config.getProperty("auth.token")
-            );
-            logger.info("SecretServerClient initialized successfully");
-
-            // Process each row starting from row 2
-            logger.info("Starting to process rows");
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {  // 0-based, skip header (row 0)
-                Row row = sheet.getRow(i);
-                if (row == null) {
-                    logger.warn("Skipping row {}: Row is null", i + 1);
-                    continue;
-                }
-                logger.info("Starting to process row {}", i + 1);
-                processRow(row, apiClient);
-                logger.info("Finished processing row {}", i + 1);
-            }
-            logger.info("Finished processing all rows");
-
-            // Save updated Excel
-            String outputPath = excelHandler.getOutputPath(config.getProperty("output.file.suffix"));
-            logger.info("Starting to save updated Excel file to: {}", outputPath);
-            excelHandler.saveWorkbook(workbook, outputPath);
-            logger.info("Updated Excel file saved successfully at: {}", outputPath);
-
+    public Workbook loadWorkbook() throws IOException {
+        File file = new File(filePath);
+        if (!file.exists()) {
+            logger.error("Excel file does not exist at path: {}", filePath);
+            throw new IOException("Excel file does not exist at path: " + filePath);
+        }
+        if (!file.canRead()) {
+            logger.error("Cannot read Excel file due to permissions: {}", filePath);
+            throw new IOException("Cannot read Excel file due to permissions: " + filePath);
+        }
+        try (FileInputStream fis = new FileInputStream(file)) {
+            return new XSSFWorkbook(fis);
         } catch (IOException e) {
-            logger.error("Excel file issue: {}", e.getMessage(), e);
-        } catch (Exception e) {
-            logger.error("Unexpected error: {}", e.getMessage(), e);
+            logger.error("Excel file is corrupted or invalid: {}", filePath, e);
+            throw new IOException("Excel file is corrupted or invalid: " + filePath, e);
         }
     }
 
-    private static void processRow(Row row, SecretServerClient apiClient) {
-        try {
-            String secretId = ExcelHandler.getCellValue(row.getCell(0));
-            String secretName = ExcelHandler.getCellValue(row.getCell(1));
-
-            if (secretId == null || secretName == null) {
-                logger.warn("Skipping row {}: secretid or secretname is null", row.getRowNum() + 1);
-                return;
-            }
-
-            logger.info("Starting API call to get details for secretId {}", secretId);
-            SecretServerClient.SecretDetails details = apiClient.getSecretDetails(secretId, 3);
-            logger.info("API call to get details for secretId {} completed", secretId);
-            if (details != null) {
-                // Ensure cells exist before setting values
-                Cell secretNameFromSSCell = row.getCell(2, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
-                Cell statusCell = row.getCell(3, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
-                ExcelHandler.setCellValue(secretNameFromSSCell, details.name);
-                ExcelHandler.setCellValue(statusCell, details.status);
-            } else {
-                // Ensure status cell exists
-                Cell statusCell = row.getCell(3, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
-                ExcelHandler.setCellValue(statusCell, "API Call Failed");
-            }
-
-            logger.info("Starting API call to disable secretId {}", secretId);
-            boolean disableSuccess = apiClient.disableSecret(secretId, 3);
-            logger.info("API call to disable secretId {} completed", secretId);
-            // Ensure cells exist
-            Cell statusCell = row.getCell(3, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
-            Cell actionCell = row.getCell(4, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
-            if (disableSuccess) {
-                ExcelHandler.setCellValue(statusCell, "Disabled");
-                ExcelHandler.setCellValue(actionCell, "Success");
-            } else {
-                ExcelHandler.setCellValue(actionCell, "Fail");
-            }
-        } catch (Exception e) {
-            logger.error("Error processing row {}: {}", row.getRowNum() + 1, e.getMessage(), e);
+    public void saveWorkbook(Workbook workbook, String outputPath) throws IOException {
+        try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+            workbook.write(fos);
+        } catch (IOException e) {
+            logger.error("Failed to save Excel file at: {}", outputPath, e);
+            throw e;
         }
+    }
+
+    public String getOutputPath(String suffix) {
+        int dotIndex = filePath.lastIndexOf('.');
+        return filePath.substring(0, dotIndex) + suffix + filePath.substring(dotIndex);
+    }
+
+    public static String getCellValue(Cell cell) {
+        if (cell == null) return null;
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                double numericValue = cell.getNumericCellValue();
+                // Format as integer if no decimal part
+                if (numericValue == Math.floor(numericValue)) {
+                    return String.valueOf((long) numericValue);
+                } else {
+                    return String.valueOf(numericValue);
+                }
+            default:
+                return null;
+        }
+    }
+
+    public static void setCellValue(Cell cell, String value) {
+        if (cell == null) {
+            logger.error("Cannot set value: Cell is null");
+            throw new IllegalArgumentException("Cell is null");
+        }
+        cell.setCellValue(value);
     }
 }
