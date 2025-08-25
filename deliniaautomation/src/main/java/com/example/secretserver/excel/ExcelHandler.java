@@ -1,14 +1,20 @@
+// change 2 00:21 
+
 package com.example.secretserver.excel;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
 public class ExcelHandler {
+    private static final Logger logger = LoggerFactory.getLogger(ExcelHandler.class);
     private final String filePath;
 
     public ExcelHandler(String filePath) {
@@ -16,39 +22,59 @@ public class ExcelHandler {
     }
 
     public Workbook loadWorkbook() throws IOException {
-        try (FileInputStream fis = new FileInputStream(filePath)) {
+        File file = new File(filePath);
+        if (!file.exists()) {
+            logger.error("Excel file does not exist at path: {}", filePath);
+            throw new IOException("Excel file does not exist at path: " + filePath);
+        }
+        if (!file.canRead()) {
+            logger.error("Cannot read Excel file due to permissions: {}", filePath);
+            throw new IOException("Cannot read Excel file due to permissions: " + filePath);
+        }
+        try (FileInputStream fis = new FileInputStream(file)) {
             return new XSSFWorkbook(fis);
         } catch (IOException e) {
-            throw new IOException("Excel file not found or corrupted: " + filePath, e);
+            logger.error("Excel file is corrupted or invalid: {}", filePath, e);
+            throw new IOException("Excel file is corrupted or invalid: " + filePath, e);
         }
     }
 
     public void saveWorkbook(Workbook workbook, String outputPath) throws IOException {
         try (FileOutputStream fos = new FileOutputStream(outputPath)) {
             workbook.write(fos);
+        } catch (IOException e) {
+            logger.error("Failed to save Excel file at: {}", outputPath, e);
+            throw e;
         }
     }
 
     public String getOutputPath(String suffix) {
-        // Logic to append suffix, e.g., secrets.xlsx -> secrets_updated.xlsx
         int dotIndex = filePath.lastIndexOf('.');
         return filePath.substring(0, dotIndex) + suffix + filePath.substring(dotIndex);
     }
 
-    // Helper to get cell value as String (handles null/numeric/etc.)
     public static String getCellValue(Cell cell) {
         if (cell == null) return null;
         switch (cell.getCellType()) {
-            case STRING: return cell.getStringCellValue();
-            case NUMERIC: return String.valueOf(cell.getNumericCellValue());
-            default: return null;
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                double numericValue = cell.getNumericCellValue();
+                // Format as integer if no decimal part
+                if (numericValue == Math.floor(numericValue)) {
+                    return String.valueOf((long) numericValue);
+                } else {
+                    return String.valueOf(numericValue);
+                }
+            default:
+                return null;
         }
     }
 
-    // Helper to set cell value (creates cell if null)
     public static void setCellValue(Cell cell, String value) {
         if (cell == null) {
-            cell = cell.getRow().createCell(cell.getColumnIndex());
+            logger.error("Cannot set value: Cell is null");
+            throw new IllegalArgumentException("Cell is null");
         }
         cell.setCellValue(value);
     }
