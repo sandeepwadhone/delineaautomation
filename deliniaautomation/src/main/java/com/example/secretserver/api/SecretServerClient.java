@@ -1,4 +1,5 @@
-//change 2 00:04
+// changes 3 00:22
+
 package com.example.secretserver.api;
 
 import com.google.gson.Gson;
@@ -34,6 +35,10 @@ public class SecretServerClient {
                 .setDefaultRequestConfig(config)
                 .build();
         this.gson = new Gson();
+    }
+
+    public String getBaseUrl() {
+        return baseUrl;
     }
 
     public static class SecretDetails {
